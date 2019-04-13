@@ -1,9 +1,9 @@
 import os
-import pandas as pd
+import sys
+
 from skimage.io import imread, imshow, imread_collection_wrapper
 from spectral import get_rgb
 
-import sys
 sys.path.append("../")
 from config import TRAIN_PATH
 
@@ -31,17 +31,3 @@ def load_and_show_img(file_name, imgs_path=TRAIN_PATH):
     img = load_image(file_name, imgs_path)
     rgb = tif_to_rgb(img)
     imshow(rgb)
-    
-def extract_label_values(df, values_col=2):
-    """
-    extract values from dataframe of labels
-    
-    Parameters
-    ----------
-    df : pandas.DataFrame
-         labels
-    
-    values_col: int
-                column index of df where values start 
-    """
-    return df.iloc[:, 2:].values
