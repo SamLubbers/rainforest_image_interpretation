@@ -1,6 +1,6 @@
 import os
 import pandas as pd
-from skimage.io import imread, imshow
+from skimage.io import imread, imshow, imread_collection_wrapper
 from spectral import get_rgb
 
 import sys
@@ -10,6 +10,17 @@ from config import TRAIN_PATH
 def load_image(file_name, imgs_path=TRAIN_PATH):
     path = os.path.join(imgs_path, file_name)
     return imread(path)
+
+def load_image_collection(imgs_path):
+    img_file_pattern = "*.tif"
+    imgs_path_pattern = os.path.join(imgs_path, img_file_pattern)
+    """
+    it is necessary to create custom imread collection function which reads images with the 'imread' function
+    in order to obtain the raw values from the tif image. 
+    The default imread_collection function returns images that are uncorrectly scaled between 0 and 255
+    """
+    imread_collection_custom = imread_collection_wrapper(imread)
+    return imread_collection_custom(imgs_path_pattern, conserve_memory=True)
 
 def tif_to_rgb(img):
     """returns image with rgb values between 0 and 1"""
