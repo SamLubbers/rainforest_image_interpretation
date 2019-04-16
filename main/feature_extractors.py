@@ -13,7 +13,7 @@ class BaseFeatureExtractor(TransformerMixin):
         raise NotImplementedError
 
 
-class SpectralFeatureExtractor(BaseFeatureExtractor):
+class ColorChannelsFeatureExtractor(BaseFeatureExtractor):
     """
     extracts mean and standard deviation of every color channel in the image (RGB)
     and the brightness, where brightness is defined as the mean of all color channels
@@ -33,11 +33,11 @@ class SpectralFeatureExtractor(BaseFeatureExtractor):
     def transform(self, imgs, y=None):
         imgs = imgs[:, :, :, :3]  # extract color channels
         rgb_means = np.mean(imgs, axis=self.pixels_axis)
+        rgb_sds = np.std(imgs, axis=self.pixels_axis)
         brightness = np.mean(rgb_means, axis=1)
         brightness = np.reshape(brightness, (-1, 1))
-        rgb_sds = np.std(imgs, axis=self.pixels_axis)
 
-        return np.concatenate((rgb_means, brightness, rgb_sds), axis=1)
+        return np.concatenate((rgb_means, rgb_sds, brightness), axis=1)
 
 
 class NDVIFeatureExtractor(BaseFeatureExtractor):
