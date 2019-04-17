@@ -44,9 +44,6 @@ def extract_features(imgs_collection, feature_extractor, batch_size=1000):
     features[0, :] = features_im0
     for i in range(1, n_images, batch_size):
         imgs_batch = concatenate_images(imgs_collection[i:i + batch_size])
-        # casting is required for feature extraction!
-        # else the default uint16 produces errors in the computations
-        imgs_batch = imgs_batch.astype('float64', casting='safe')
         features_batch = feature_extractor.fit_transform(imgs_batch)
         features[i:i + batch_size, :] = features_batch
     return features
