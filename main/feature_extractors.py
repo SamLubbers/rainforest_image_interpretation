@@ -1,7 +1,7 @@
 import sys
 
 import numpy as np
-from skimage.feature import local_binary_pattern
+from skimage.feature import local_binary_pattern, greycoprops, greycomatrix
 from sklearn.base import TransformerMixin
 
 sys.path.append("../")
@@ -93,7 +93,7 @@ class LBPFeatureExtractor(BaseFeatureExtractor):
         self.n_bins = self.p + 2
         super().__init__()
 
-    def tiff_lbp(self, img):
+    def extract_feature(self, img):
         """Obtain lbp feature from tiff image"""
         img_grayscale = tif_to_grayscale(img)
         lbp = local_binary_pattern(img_grayscale, self.p, self.r, method='uniform')
@@ -107,6 +107,37 @@ class LBPFeatureExtractor(BaseFeatureExtractor):
     def transform(self, imgs, y=None):
         features = np.zeros([self.n_images, self.n_bins])
         for i in range(self.n_images):
-            features[i, :] = self.tiff_lbp(imgs[i, :, :, :])
+            features[i, :] = self.extract_feature(imgs[i, :, :, :])
+
+        return features
+
+class GLCMFeatureExtractor(BaseFeatureExtractor):
+    """extracts set of GLCM features from a set of images"""
+
+    def __init__(self):
+        self.distances = [1]
+        self.directions = [0, np.pi/4, np.pi/2, 3*np.pi/4] # omnidirectional
+        self.glcm_features = ['contrast', 'ASM', 'correlation']
+        self.n_features = len(self.glcm_features)
+        super().__init__()
+
+    def extract_feature(self, img):
+        """Obtain glcm feature from tiff image"""
+        img_grayscale = tif_to_grayscale(img, as_int=True)
+        glcm = greycomatrix(img_grayscale, self.distances, self.directions,
+                            symmetric=True, normed=True)
+        im_features = np.zeros(self.n_features)
+        for i, feature in enumerate(self.glcm_features):
+            im_features[i] = np.mean(greycoprops(glcm, feature))
+        return im_features
+
+    def fit(self, imgs, y=None):
+        self.n_images = np.shape(imgs)[0]
+        return self
+
+    def transform(self, imgs, y=None):
+        features = np.zeros([self.n_images, self.n_features])
+        for i in range(self.n_images):
+            features[i, :] = self.extract_feature(imgs[i, :, :, :])
 
         return features
