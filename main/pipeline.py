@@ -1,6 +1,6 @@
 import os
 import sys
-from time import process_time
+from time import time
 
 import numpy as np
 import pandas as pd
@@ -79,16 +79,16 @@ def complete_pipeline(feature_extractor):
     train_labels = extract_label_values(train_labels)
 
     # extract features
-    t_start_features = process_time()
+    t_start_features = time()
     train_features = extract_features(train_imgs, feature_extractor)
-    t_end_features = process_time()
+    t_end_features = time()
     validation_features = extract_features(validation_imgs, feature_extractor)
 
     # train model
     classifier = RandomForestClassifier(n_estimators=500)
-    t_start_training = process_time()
+    t_start_training = time()
     classifier.fit(train_features, train_labels)
-    t_end_training = process_time()
+    t_end_training = time()
 
     # make predictions
     validation_predictions = classifier.predict(validation_features)
