@@ -12,9 +12,17 @@ from config import DATASETS_PATH, TRAIN_PATH, VALIDATION_PATH
 from helpers.img_utils import load_image_collection
 from helpers.data import extract_label_values
 from helpers.evaluation import evaluate_performance_validation
+from multiprocessing import Pool, cpu_count
 
 
-def extract_features(imgs_collection, feature_extractor, batch_size=1000):
+def extract_features_batch(imgs_collection_batch, feature_extractor):
+    """extracts features of a collection of images.
+    It is required as a separate function for parallel processing"""
+
+    imgs_batch = concatenate_images(imgs_collection_batch)
+    return feature_extractor.fit_transform(imgs_batch)
+
+def extract_features(imgs_collection, feature_extractor, batch_size=200):
     """
     Extracts from imgs_collection the set of features specified in feature_extractor.
     Extracts the features in batches because it is unviable to load all images at once into memory
@@ -25,8 +33,11 @@ def extract_features(imgs_collection, feature_extractor, batch_size=1000):
                       collection of images from which we want to extract the features
     feature_extractor: sklearn transformer
                        transformers that extract features from images
-    batch_size: number of images to extract features from at each iteration
-                a deafult value of 1000 loads approx. 0.5 GB into memory for this dataset
+    batch_size: number of images to extract features from in each process
+                total memory used at a given time is cpu_cout * memory occupied
+                by batch_size number of images
+
+
 
     Returns
     -------
@@ -36,16 +47,15 @@ def extract_features(imgs_collection, feature_extractor, batch_size=1000):
     """
 
     n_images = len(imgs_collection)
-    # get number of total features
-    features_im0 = feature_extractor.fit_transform(concatenate_images(imgs_collection[:1]))
-    n_features = np.shape(features_im0)[1]
-    # create array for features
-    features = np.zeros([n_images, n_features])
-    features[0, :] = features_im0
-    for i in range(1, n_images, batch_size):
-        imgs_batch = concatenate_images(imgs_collection[i:i + batch_size])
-        features_batch = feature_extractor.fit_transform(imgs_batch)
-        features[i:i + batch_size, :] = features_batch
+
+    imgs_collection_batches = [imgs_collection[i:i + batch_size]
+                               for i in range(0, n_images, batch_size)]
+
+    with Pool(cpu_count()) as pool:
+        batch_features = [pool.apply(extract_features_batch, args=(ims, feature_extractor))
+                          for ims in imgs_collection_batches]
+
+    features = np.concatenate(batch_features)
     return features
 
 
