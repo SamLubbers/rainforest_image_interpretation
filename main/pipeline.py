@@ -96,6 +96,8 @@ def complete_pipeline(feature_extractor):
     # evaluate performance
     mean_f2, per_class_f2 = evaluate_performance_validation(validation_predictions)
 
+    # print(classifier.feature_importances_)
+
     r = {'mean_f2': mean_f2,
          'per_class_f2': per_class_f2,
          'time_feature_extraction': t_end_features - t_start_features,
