@@ -7,7 +7,7 @@ from numpy import histogramdd
 from skimage.color import rgb2lab, rgb2hsv
 from skimage.feature import local_binary_pattern, greycoprops, greycomatrix
 from sklearn.base import TransformerMixin
-from sklearn.cluster import KMeans
+from sklearn.cluster import MiniBatchKMeans
 
 sys.path.append("../")
 from helpers.img_utils import tif_to_grayscale, tif_to_rgb
@@ -108,10 +108,10 @@ class LBPFeatureExtractor(BaseFeatureExtractor):
         return lbp_feature
 
     def fit(self, imgs, y=None):
-        self.n_images = np.shape(imgs)[0]
         return self
 
     def transform(self, imgs, y=None):
+        self.n_images = np.shape(imgs)[0]
         features = np.zeros([self.n_images, self.n_bins])
         for i in range(self.n_images):
             features[i, :] = self.extract_feature(imgs[i, :, :, :])
@@ -146,10 +146,10 @@ class GLCMFeatureExtractor(BaseFeatureExtractor):
         return im_features
 
     def fit(self, imgs, y=None):
-        self.n_images = np.shape(imgs)[0]
         return self
 
     def transform(self, imgs, y=None):
+        self.n_images = np.shape(imgs)[0]
         features = np.zeros([self.n_images, self.n_features])
         for i in range(self.n_images):
             features[i, :] = self.extract_feature(imgs[i, :, :, :])
@@ -192,10 +192,10 @@ class GCHFeatureExtractor(BaseFeatureExtractor):
         return GCH
 
     def fit(self, imgs, y=None):
-        self.n_images = np.shape(imgs)[0]
         return self
 
     def transform(self, imgs, y=None):
+        self.n_images = np.shape(imgs)[0]
         features = np.zeros([self.n_images, self.n_features])
         for i in range(self.n_images):
             features[i, :] = self.extract_feature(imgs[i, :, :, :])
@@ -205,8 +205,8 @@ class GCHFeatureExtractor(BaseFeatureExtractor):
 
 class LocalFeatureExtractor(BaseFeatureExtractor):
 
-    def __init__(self, descriptor='brisk'):
-        self.detector = BRISK_create()
+    def __init__(self, threshold=10, descriptor='brisk'):
+        self.detector = BRISK_create(thresh=threshold)
         if descriptor == 'brisk':
             self.extractor = self.detector
         elif descriptor == 'freak':
@@ -237,22 +237,34 @@ class LocalFeatureExtractor(BaseFeatureExtractor):
 class BoVW(TransformerMixin):
     """Bag of visual words"""
 
-    def __init__(self, n_clusters=1000):
+    def __init__(self, n_clusters=1000, batch_size=500):
         self.n_clusters = n_clusters  # number of words in the visual bag of words
-        self.kmeans = KMeans(n_clusters=self.n_clusters)
+        self.kmeans = MiniBatchKMeans(n_clusters=self.n_clusters,
+                                      batch_size=batch_size,
+                                      random_state=0)
 
     def create_histogram(self, img_descriptors):
-        clusters = self.kmeans.predict(img_descriptors)
+        if img_descriptors is None:
+            # return empty histogram if no keypoints are detected
+            return np.zeros(self.n_clusters)
+
+        try:
+            clusters = self.kmeans.predict(img_descriptors)
+        except ValueError:
+            # if there is only one descriptor we need to make it have one row
+            img_descriptors = img_descriptors.reshape(1, -1)
+            clusters = self.kmeans.predict(img_descriptors)
         histogram = np.zeros(self.n_clusters)
         counts = np.unique(clusters, return_counts=True)
         for i, count in zip(counts[0], counts[1]):
             histogram[i] = count
-        # normalize histogram
-        histogram /= np.sum(histogram)
+
+        histogram /= np.sum(histogram) # normalize histogram
         return histogram
 
     def fit(self, descriptors_list, y=None):
         """creates dictionary for the bag of visual words"""
+        descriptors_list = [d for d in descriptors_list if d is not None]
         self.kmeans.fit(np.concatenate(descriptors_list))
         return self
 
@@ -260,7 +272,7 @@ class BoVW(TransformerMixin):
         """create feature histograms for all descriptors of all images"""
         self.n_images = len(descriptors_list)
         histograms = np.zeros([self.n_images, self.n_clusters])
-        for i, descriptor in enumerate(descriptors_list):
-            histograms[i, :] = self.create_histogram(descriptor)
+        for i, descriptors in enumerate(descriptors_list):
+            histograms[i, :] = self.create_histogram(descriptors)
 
         return histograms
