@@ -7,7 +7,7 @@ import pandas as pd
 from skimage.io import concatenate_images
 from sklearn.ensemble import RandomForestClassifier
 from itertools import chain
-from sklearn.pipeline import FeatureUnion, Pipeline
+from sklearn.pipeline import make_union, Pipeline, FeatureUnion
 
 from feature_extractors import BoVW
 
@@ -16,7 +16,7 @@ from config import DATASETS_PATH, TRAIN_PATH, VALIDATION_PATH
 from helpers.img_utils import load_image_collection
 from helpers.data import extract_label_values
 from helpers.evaluation import evaluate_performance_validation
-from multiprocessing import Pool, cpu_count
+from joblib import Parallel, delayed, parallel_backend
 
 
 def extract_features_batch(imgs_collection_batch, feature_extractor, mode):
@@ -31,7 +31,7 @@ def extract_features_batch(imgs_collection_batch, feature_extractor, mode):
     return feature_extractor.transform(imgs_batch)
 
 
-def extract_global_features(imgs_collection, feature_extractor, mode, batch_size=200):
+def extract_features(imgs_collection, feature_extractor, mode, batch_size=200, feature_type='global'):
     """
     Extracts from imgs_collection the set of global features specified in feature_extractor.
     Extracts the features in batches because it is unviable to load all images at once into memory
@@ -47,8 +47,10 @@ def extract_global_features(imgs_collection, feature_extractor, mode, batch_size
     mode: 'train' / 'validate'. Determines whether the transformers are fitted to the data or not.
 
     batch_size: number of images to extract features from in each process
-                total memory used at a given time is cpu_cout * memory occupied
-                by batch_size number of images
+                total memory used at a given time is n_jobs * (memory occupied
+                by batch_size number of images)
+
+    feature_type: 'global' / 'local'
 
     Returns
     -------
@@ -62,28 +64,25 @@ def extract_global_features(imgs_collection, feature_extractor, mode, batch_size
     imgs_collection_batches = [imgs_collection[i:i + batch_size]
                                for i in range(0, n_images, batch_size)]
 
-    with Pool(cpu_count()) as pool:
-        batch_features = [pool.apply(extract_features_batch, args=(ims, feature_extractor, mode))
-                          for ims in imgs_collection_batches]
+    if feature_type == 'global':
+        pll_backend = 'loky'
+        n_jobs = -1  # use all processors
+    else:
+        pll_backend = 'threading'  # loky multiprocessing backend does not work for cv2 features
+        n_jobs = 8  # use 8 threads
 
-    return np.concatenate(batch_features)
+    with parallel_backend(pll_backend, n_jobs=n_jobs):
+        batch_features = Parallel()(delayed(extract_features_batch)
+                                    (imgs, feature_extractor, mode)
+                                    for imgs in imgs_collection_batches)
 
-
-def extract_local_feature_descriptors(imgs_collection, local_feature_extractor, mode, batch_size=1000):
-    n_images = len(imgs_collection)
-    descriptors = []
-    for i in range(0, n_images, batch_size):
-        imgs_batch = concatenate_images(imgs_collection[i:i + batch_size])
-        if mode == 'train':
-            local_feature_extractor.fit(imgs_batch)
-
-        batch_descriptors = local_feature_extractor.transform(imgs_batch)
-        descriptors.append(batch_descriptors)
-
-    return list(chain.from_iterable(descriptors))
+    if feature_type == 'global':
+        return np.concatenate(batch_features)
+    elif feature_type == 'local':
+        return list(chain.from_iterable(batch_features))
 
 
-def extract_local_features(imgs_collection, local_feature_pipeline, mode):
+def extract_local_bovw(imgs_collection, local_feature_pipeline, mode):
     """
 
     Parameters
@@ -104,11 +103,10 @@ def extract_local_features(imgs_collection, local_feature_pipeline, mode):
     local_feature_extractor, bovw = local_feature_pipeline.named_steps.values()
 
     # extract local features
-    # feature extraction is done sequentially because cv2 objects do not work with multiprocessing library
-
-    local_feature_descriptors = extract_local_feature_descriptors(imgs_collection,
-                                                                  local_feature_extractor,
-                                                                  mode)
+    local_feature_descriptors = extract_features(imgs_collection,
+                                                 local_feature_extractor,
+                                                 mode,
+                                                 feature_type='local')
 
     if mode == 'train':
         # create dictionary
@@ -118,17 +116,22 @@ def extract_local_features(imgs_collection, local_feature_pipeline, mode):
     return bovw.transform(local_feature_descriptors)
 
 
-def extract_features(imgs_collection, feature_extractor, mode):
+def extract_all_features(imgs_collection, feature_extractor, mode):
     """
-    Extension to "extract_features" method that computes BoVW if necessary
+    feature extraction of local and global features
+
+    This function is necessary because it is not possible to extract local features directly
+    with `extract_features`. Instead, if any local features are to be extracted this method calls
+    the specialised `extract_local_features` method.
 
     Parameters
     ----------
     imgs_collection : skimage.ImageCollection
                       collection of images from which we want to extract the features
 
-    feature_extractor: sklearn transformer
+    feature_extractor: sklearn transformer | sklearn Pipeline | sklearn FeatureUnion
                        transformers that extract features from images
+                       It can also contain a bovw extractor
 
     mode: 'train' / 'validate'. Determines whether the transformers are fitted to the data or not.
 
@@ -137,25 +140,38 @@ def extract_features(imgs_collection, feature_extractor, mode):
                 by batch_size number of images
     """
 
-    def contains_bovw(feature_extractor):
+    def is_local_pipeline(feature_extractor):
         if isinstance(feature_extractor, Pipeline):
             return any(isinstance(f, BoVW) for f in feature_extractor.named_steps.values())
+        else:
+            return False
 
-        # TODO: identify if there is a pipeline inside feature union and decompose
-        # elif isinstance(feature_extractor, FeatureUnion):
-        #     for extractor in feature_extractor.transformer_list:
-        #         if isinstance(extractor, Pipeline):
-        #             if any(isinstance(f, BoVW) for f in feature_extractor.named_steps.values()):
-        #                 return True
+    if is_local_pipeline(feature_extractor):
+        return extract_local_bovw(imgs_collection, feature_extractor, mode)
 
-        return False
+    elif isinstance(feature_extractor, FeatureUnion):
+        extractors = [x for _, x in feature_extractor.transformer_list]
+        if any([is_local_pipeline(x) for x in extractors]):
+            global_extractors = []
+            local_extractors = []
 
-    if contains_bovw(feature_extractor):
-        # TODO: generalize to feature union. Currently it assumes it is a pipeline
-        return extract_local_features(imgs_collection, feature_extractor, mode)
+            for x in extractors:
+                if is_local_pipeline(x):
+                    local_extractors.append(x)
+                else:
+                    global_extractors.append(x)
 
-    else:
-        return extract_global_features(imgs_collection, feature_extractor, mode)
+            global_features = extract_features(imgs_collection,
+                                               make_union(*global_extractors), mode)
+
+            local_features = []
+            for x in local_extractors:
+                local_features.append(extract_local_bovw(imgs_collection, x, mode))
+
+            local_features = np.concatenate(local_features, axis=1)
+            return np.concatenate([global_features, local_features], axis=1)
+
+    return extract_features(imgs_collection, feature_extractor, mode)
 
 
 def complete_pipeline(feature_extractor):
@@ -179,12 +195,12 @@ def complete_pipeline(feature_extractor):
 
     # extract features
     t_start_features = time()
-    train_features = extract_features(train_imgs, feature_extractor, mode='train')
+    train_features = extract_all_features(train_imgs, feature_extractor, mode='train')
     t_end_features = time()
-    validation_features = extract_features(validation_imgs, feature_extractor, mode='validate')
+    validation_features = extract_all_features(validation_imgs, feature_extractor, mode='validate')
 
     # train model
-    classifier = RandomForestClassifier(n_estimators=500)
+    classifier = RandomForestClassifier(n_estimators=500, n_jobs=-1)
     t_start_training = time()
     classifier.fit(train_features, train_labels)
     t_end_training = time()

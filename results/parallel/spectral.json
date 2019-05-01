@@ -1,24 +1,24 @@
 {
-    "mean_f2": 0.8265368257026906,
+    "mean_f2": 0.8258462269072733,
     "per_class_f2": {
-        "primary": 0.983984116479153,
-        "clear": 0.9527917730692249,
-        "agriculture": 0.7369774386197745,
-        "road": 0.5542710340398203,
-        "water": 0.5574103643489623,
-        "partly_cloudy": 0.7137670636073192,
-        "cultivation": 0.1669254658385093,
-        "habitation": 0.20960832313341493,
-        "haze": 0.5234732031574574,
-        "cloudy": 0.6922285126093669,
+        "primary": 0.9841946415334112,
+        "clear": 0.9524960298280741,
+        "agriculture": 0.7336483461825416,
+        "road": 0.5564837424495567,
+        "water": 0.558139534883721,
+        "partly_cloudy": 0.7114825581395348,
+        "cultivation": 0.16459305339554176,
+        "habitation": 0.21361000915471468,
+        "haze": 0.5222638368705784,
+        "cloudy": 0.6841563786008229,
         "bare_ground": 0.006906077348066299,
         "selective_logging": 0.0,
-        "artisinal_mine": 0.3924914675767918,
+        "artisinal_mine": 0.4081632653061224,
         "blooming": 0.0,
         "slash_burn": 0.0,
         "conventional_mine": 0.0,
         "blow_down": 0.0
     },
-    "time_feature_extraction": 85.24838590621948,
-    "time_training": 41.56117010116577
+    "time_feature_extraction": 83.23410391807556,
+    "time_training": 42.346739053726196
 }

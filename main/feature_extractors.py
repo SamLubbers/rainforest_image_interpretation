@@ -8,6 +8,7 @@ from skimage.color import rgb2lab, rgb2hsv
 from skimage.feature import local_binary_pattern, greycoprops, greycomatrix
 from sklearn.base import TransformerMixin
 from sklearn.cluster import MiniBatchKMeans
+from sklearn.preprocessing import MinMaxScaler
 
 sys.path.append("../")
 from helpers.img_utils import tif_to_grayscale, tif_to_rgb
@@ -24,32 +25,35 @@ class BaseFeatureExtractor(TransformerMixin):
         raise NotImplementedError
 
 
-class ColorChannelsFeatureExtractor(BaseFeatureExtractor):
+class ChannelsFeatureExtractor(BaseFeatureExtractor):
     """
-    extracts mean and standard deviation of every color channel in the image (RGB)
-    and the brightness, where brightness is defined as the mean of all color channels
+    extracts mean and standard deviation of every channel in the image (B, G, R, NIR)
+    and the brightness, where brightness is defined as the mean of channels
 
     Parameters
     ----------
     imgs : numpy.ndarray (np.int | np.float)
            set of images, each with 4 channels (B, G, R, NIR)
+    rgb : if True only the first three colour channels are used
     """
 
-    def __init__(self):
+    def __init__(self, bgr=False):
         self.pixels_axis = (1, 2)
+        self.bgr = bgr
         super().__init__()
 
     def fit(self, imgs, y=None):
         return self
 
     def transform(self, imgs, y=None):
-        imgs = imgs[:, :, :, :3]  # extract color channels
-        rgb_means = np.mean(imgs, axis=self.pixels_axis)
-        rgb_sds = np.std(imgs, axis=self.pixels_axis)
-        brightness = np.mean(rgb_means, axis=1)
+        if self.bgr:
+            imgs = imgs[:, :, :, :3] # extract color channels
+        means = np.mean(imgs, axis=self.pixels_axis)
+        sds = np.std(imgs, axis=self.pixels_axis)
+        brightness = np.mean(means, axis=1)
         brightness = np.reshape(brightness, (-1, 1))
 
-        return np.concatenate((rgb_means, rgb_sds, brightness), axis=1)
+        return np.concatenate((means, sds, brightness), axis=1)
 
 
 class NDVIFeatureExtractor(BaseFeatureExtractor):
@@ -120,9 +124,17 @@ class LBPFeatureExtractor(BaseFeatureExtractor):
 
 
 class GLCMFeatureExtractor(BaseFeatureExtractor):
-    """extracts set of GLCM features from a set of images"""
+    """extracts set of GLCM features from a set of images
+    Parameters
+    ----------
+    nir: if False it will extract the GLCM from the grayscale image
+         if True it will extract the GLCM from the NIR channel
 
-    def __init__(self):
+    """
+
+    def __init__(self, nir=False):
+        self.nir = nir
+        self.scaler = MinMaxScaler(feature_range=(0, 255))
         self.distances = [1]
         self.directions = [0, np.pi / 4, np.pi / 2, 3 * np.pi / 4]  # omnidirectional
         self.glcm_features = ['contrast', 'ASM', 'correlation']
@@ -130,15 +142,17 @@ class GLCMFeatureExtractor(BaseFeatureExtractor):
         super().__init__()
 
     def obtain_property(self, glcm, feature):
-        if feature == 'sd':
-            return np.std(glcm)
-        else:
-            return np.mean(greycoprops(glcm, feature))
+        return np.mean(greycoprops(glcm, feature))
 
     def extract_feature(self, img):
         """Obtain glcm feature from tiff image"""
-        img_grayscale = tif_to_grayscale(img, as_int=True)
-        glcm = greycomatrix(img_grayscale, self.distances, self.directions,
+        if self.nir:
+            img_2d = img[:, :, 3]
+            img_2d = self.scaler.fit_transform(img_2d.astype('float64'))
+            img_2d = img_2d.astype('uint8')
+        else:
+            img_2d = tif_to_grayscale(img, as_int=True)
+        glcm = greycomatrix(img_2d, self.distances, self.directions,
                             symmetric=True, normed=True)
         im_features = np.zeros(self.n_features)
         for i, feature in enumerate(self.glcm_features):
@@ -205,12 +219,16 @@ class GCHFeatureExtractor(BaseFeatureExtractor):
 
 class LocalFeatureExtractor(BaseFeatureExtractor):
 
-    def __init__(self, threshold=10, descriptor='brisk'):
-        self.detector = BRISK_create(thresh=threshold)
+    def __init__(self, descriptor='brisk', n_octaves=4,threshold=30,pattern_scale=1.0):
+        
+        self.detector = BRISK_create(thresh=threshold,
+                                     octaves=n_octaves-1,
+                                     patternScale=pattern_scale)
+
         if descriptor == 'brisk':
             self.extractor = self.detector
         elif descriptor == 'freak':
-            self.extractor = FREAK_create()
+            self.extractor = FREAK_create(patternScale=pattern_scale, nOctaves=n_octaves)
 
         self.feature_dimension = 64
         super().__init__()

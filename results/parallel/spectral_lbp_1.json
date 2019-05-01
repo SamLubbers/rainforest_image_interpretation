@@ -1,0 +1,24 @@
+{
+    "mean_f2": 0.8333998997336645,
+    "per_class_f2": {
+        "primary": 0.9853338275003971,
+        "clear": 0.9552228508348282,
+        "agriculture": 0.7409553771007533,
+        "road": 0.5634168505776971,
+        "water": 0.5572574762946754,
+        "partly_cloudy": 0.7111533401549482,
+        "cultivation": 0.14278228975635315,
+        "habitation": 0.3759952816278384,
+        "haze": 0.534604227103191,
+        "cloudy": 0.7412124299541518,
+        "bare_ground": 0.0,
+        "selective_logging": 0.0,
+        "artisinal_mine": 0.423728813559322,
+        "blooming": 0.0,
+        "slash_burn": 0.0,
+        "conventional_mine": 0.0,
+        "blow_down": 0.0
+    },
+    "time_feature_extraction": 242.32545018196106,
+    "time_training": 48.41599702835083
+}
