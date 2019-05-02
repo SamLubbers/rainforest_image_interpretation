@@ -220,15 +220,14 @@ class GCHFeatureExtractor(BaseFeatureExtractor):
 class LocalFeatureExtractor(BaseFeatureExtractor):
 
     def __init__(self, descriptor='brisk', n_octaves=4,threshold=30,pattern_scale=1.0):
-        
         self.detector = BRISK_create(thresh=threshold,
-                                     octaves=n_octaves-1,
+                                     octaves=n_octaves,
                                      patternScale=pattern_scale)
 
         if descriptor == 'brisk':
             self.extractor = self.detector
         elif descriptor == 'freak':
-            self.extractor = FREAK_create(patternScale=pattern_scale, nOctaves=n_octaves)
+            self.extractor = FREAK_create(patternScale=pattern_scale,nOctaves=n_octaves)
 
         self.feature_dimension = 64
         super().__init__()
