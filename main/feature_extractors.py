@@ -7,7 +7,7 @@ from numpy import histogramdd
 from skimage.color import rgb2lab, rgb2hsv
 from skimage.feature import local_binary_pattern, greycoprops, greycomatrix
 from sklearn.base import TransformerMixin
-from sklearn.cluster import MiniBatchKMeans
+from sklearn.cluster import MiniBatchKMeans, KMeans
 from sklearn.preprocessing import MinMaxScaler
 
 sys.path.append("../")
@@ -47,7 +47,7 @@ class ChannelsFeatureExtractor(BaseFeatureExtractor):
 
     def transform(self, imgs, y=None):
         if self.bgr:
-            imgs = imgs[:, :, :, :3] # extract color channels
+            imgs = imgs[:, :, :, :3]  # extract color channels
         means = np.mean(imgs, axis=self.pixels_axis)
         sds = np.std(imgs, axis=self.pixels_axis)
         brightness = np.mean(means, axis=1)
@@ -219,7 +219,7 @@ class GCHFeatureExtractor(BaseFeatureExtractor):
 
 class LocalFeatureExtractor(BaseFeatureExtractor):
 
-    def __init__(self, descriptor='brisk', n_octaves=4,threshold=30,pattern_scale=1.0):
+    def __init__(self, descriptor='brisk', n_octaves=4, threshold=25, pattern_scale=1.0):
         self.detector = BRISK_create(thresh=threshold,
                                      octaves=n_octaves,
                                      patternScale=pattern_scale)
@@ -227,7 +227,7 @@ class LocalFeatureExtractor(BaseFeatureExtractor):
         if descriptor == 'brisk':
             self.extractor = self.detector
         elif descriptor == 'freak':
-            self.extractor = FREAK_create(patternScale=pattern_scale,nOctaves=n_octaves)
+            self.extractor = FREAK_create(patternScale=pattern_scale, nOctaves=n_octaves)
 
         self.feature_dimension = 64
         super().__init__()
@@ -254,8 +254,9 @@ class LocalFeatureExtractor(BaseFeatureExtractor):
 class BoVW(TransformerMixin):
     """Bag of visual words"""
 
-    def __init__(self, n_clusters=1000, batch_size=500):
+    def __init__(self, n_clusters=25, batch_size=500):
         self.n_clusters = n_clusters  # number of words in the visual bag of words
+
         self.kmeans = MiniBatchKMeans(n_clusters=self.n_clusters,
                                       batch_size=batch_size,
                                       random_state=0)
@@ -276,7 +277,7 @@ class BoVW(TransformerMixin):
         for i, count in zip(counts[0], counts[1]):
             histogram[i] = count
 
-        histogram /= np.sum(histogram) # normalize histogram
+        histogram /= np.sum(histogram)  # normalize histogram
         return histogram
 
     def fit(self, descriptors_list, y=None):
