@@ -2,6 +2,10 @@
 
 Classification of satellite images of the Amazon rainforest using features and a random forest classifier.
 
+### Dataset
+
+The dataset used in this project consists of 40,000 labelled high resolution satellite images of the Amazon basin. It has been obtained from the Kaggle competition [Understanding the Amazon from space](https://www.kaggle.com/c/planet-understanding-the-amazon-from-space). A processed version of this dataset that can be readily used with this code can be obtained [from here](https://drive.google.com/file/d/1STxQVVuvJaJd0Mb78q2Dfvq_tQdgpUUS/view?usp=sharing)
+
 ### Feature extractors
 
 All of the implemented features extractors can be found in `main/feature_extractors.py`. Feature extractors are implemented as scikit-learn transformers. Thus, to extract features from a set of images, first create an instance of a particular feature class and then call the `.fit_transform()` method, passing your images as arguments to the function
