@@ -6,3 +6,5 @@ scikit-learn
 jupyter
 scikit-image
 spectral
+opencv-contrib-python
+joblib
