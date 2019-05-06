@@ -17,6 +17,7 @@ features = fx.fit_transform(your_images)
 Because the feature extractors are scikit-learn transformers, multiple features can be obtained in parallel using `FeatureUnion`
 
 ```python
+from feature_extractors import ChannelsFeatureExtractor, NDVIFeatureExtractor
 from sklearn.pipeline import FeatureUnion
 
 spectral_fx = FeatureUnion(transformer_list=[
